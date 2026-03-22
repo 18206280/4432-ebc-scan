@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RRU4432B28 Connector Health Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #F4F6F9; color: #1A2A3A; font-size: 14px; min-height: 100vh; }
+
+.header { background: #fff; border-bottom: 1px solid #E0E6ED; padding: 18px 32px 0; }
+.header-title { font-size: 22px; font-weight: 700; color: #1A2A3A; margin-bottom: 14px; }
+
+.main-tabs { display: flex; }
+.main-tab { padding: 10px 20px; font-size: 14px; color: #8A9BB0; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color 0.15s; user-select: none; }
+.main-tab:hover { color: #2563EB; }
+.main-tab.active { color: #2563EB; border-bottom-color: #2563EB; font-weight: 600; }
+
+.page { display: none; padding: 24px 32px; }
+.page.active { display: block; }
+
+.scan-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.scan-bar label { font-size: 14px; color: #4A6080; font-weight: 500; }
+.scan-bar select { border: 1px solid #D1D9E6; border-radius: 6px; padding: 7px 32px 7px 10px; font-size: 14px; color: #1A2A3A; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A9BB0'/%3E%3C/svg%3E") no-repeat right 10px center; appearance: none; cursor: pointer; min-width: 140px; }
+.scan-bar select:focus { outline: none; border-color: #2563EB; }
+.btn-query { background: #2563EB; color: #fff; border: none; border-radius: 6px; padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn-query:hover { background: #1D4ED8; }
+.btn-query:disabled { background: #A0B0C0; cursor: not-allowed; }
+.scan-status { font-size: 13px; color: #8A9BB0; }
+.scan-status.loading { color: #2563EB; }
+.scan-status.error { color: #DC2626; }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.kpi-card { background: #fff; border: 1px solid #E0E6ED; border-radius: 12px; padding: 20px 24px; }
+.kpi-label { font-size: 13px; color: #8A9BB0; margin-bottom: 8px; }
+.kpi-value { font-size: 36px; font-weight: 700; color: #1A2A3A; line-height: 1; }
+.kpi-value.blue { color: #2563EB; }
+.kpi-value.amber { color: #D97706; }
+.kpi-value.red { color: #DC2626; }
+.kpi-value.purple { color: #7C3AED; }
+.kpi-sub { font-size: 12px; color: #A0B0C0; margin-top: 6px; }
+
+.dist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.dist-panel { background: #fff; border: 1px solid #E0E6ED; border-radius: 12px; padding: 20px 24px; }
+.dist-title { font-size: 15px; font-weight: 600; color: #1A2A3A; margin-bottom: 16px; }
+.dist-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #F4F6F9; font-size: 14px; }
+.dist-row:last-child { border-bottom: none; }
+.dist-level { color: #4A6080; display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.dist-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dist-bar-wrap { flex: 1; margin: 0 16px; height: 6px; background: #F0F4F8; border-radius: 3px; overflow: hidden; }
+.dist-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.dist-count { font-weight: 600; color: #1A2A3A; white-space: nowrap; }
+.dist-pct { color: #A0B0C0; font-weight: 400; margin-left: 4px; }
+
+.table-section { background: #fff; border: 1px solid #E0E6ED; border-radius: 12px; overflow: hidden; }
+.table-section-header { padding: 16px 24px 0; border-bottom: 1px solid #E0E6ED; }
+.table-section-title { font-size: 15px; font-weight: 600; color: #1A2A3A; margin-bottom: 12px; }
+
+.sub-tabs { display: flex; }
+.sub-tab { padding: 8px 18px; font-size: 13px; color: #8A9BB0; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none; }
+.sub-tab:hover { color: #2563EB; }
+.sub-tab.active { color: #2563EB; border-bottom-color: #2563EB; font-weight: 600; }
+.sub-tab-badge { display: inline-block; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 600; margin-left: 5px; background: #FEF3C7; color: #92400E; }
+.sub-tab-badge.red { background: #FEE2E2; color: #7F1D1D; }
+
+.filter-bar { display: flex; align-items: center; gap: 8px; padding: 12px 24px; flex-wrap: wrap; border-bottom: 1px solid #F0F4F8; }
+.filter-label { font-size: 12px; color: #A0B0C0; }
+.filter-pill { background: #F4F6F9; border: 1px solid #E0E6ED; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #4A6080; cursor: pointer; user-select: none; }
+.filter-pill:hover { border-color: #2563EB; color: #2563EB; }
+.filter-pill.active { background: #EFF6FF; border-color: #2563EB; color: #1D4ED8; font-weight: 600; }
+.filter-search { margin-left: auto; border: 1px solid #E0E6ED; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #1A2A3A; width: 220px; }
+.filter-search:focus { outline: none; border-color: #2563EB; }
+
+.sub-content { display: none; }
+.sub-content.active { display: block; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #A0B0C0; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #E0E6ED; white-space: nowrap; background: #FAFBFC; }
+.data-table td { padding: 10px 16px; border-bottom: 1px solid #F4F6F9; color: #2A3A4A; white-space: nowrap; }
+.data-table tbody tr:hover td { background: #F8FAFD; }
+.td-node { color: #2563EB; font-weight: 600; }
+.td-muted { color: #A0B0C0; }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.b-healthy  { background: #D1FAE5; color: #065F46; }
+.b-early    { background: #FEF3C7; color: #92400E; }
+.b-middle   { background: #FFEDD5; color: #7C2D12; }
+.b-late     { background: #FEE2E2; color: #7F1D1D; }
+.b-critical { background: #FCA5A5; color: #450A0A; }
+.b-nodata   { background: #F0F4F8; color: #8A9BB0; }
+.b-risk-noout { background: #F3E8FF; color: #6B21A8; }
+.b-risk-lt10  { background: #FEE2E2; color: #7F1D1D; }
+.b-nonrisk    { background: #D1FAE5; color: #065F46; }
+
+.score-wrap { display: flex; align-items: center; gap: 6px; }
+.score-bar { width: 52px; height: 5px; background: #F0F4F8; border-radius: 3px; overflow: hidden; }
+.score-fill { height: 100%; border-radius: 3px; }
+
+.m-ok   { color: #059669; }
+.m-warn { color: #D97706; }
+.m-bad  { color: #DC2626; }
+
+.table-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-top: 1px solid #F0F4F8; background: #FAFBFC; flex-wrap: wrap; gap: 8px; }
+.table-footer-meta { font-size: 12px; color: #A0B0C0; }
+.btn-export { background: #fff; border: 1px solid #D1D9E6; border-radius: 6px; padding: 5px 14px; font-size: 12px; color: #4A6080; cursor: pointer; }
+.btn-export:hover { border-color: #2563EB; color: #2563EB; }
+
+.coming-soon { background: #fff; border: 1px solid #E0E6ED; border-radius: 12px; padding: 60px; text-align: center; color: #A0B0C0; }
+.coming-soon h3 { font-size: 18px; color: #4A6080; margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .dist-grid { grid-template-columns: 1fr; }
+  .page { padding: 16px; }
+  .header { padding: 14px 16px 0; }
+}
+@media (max-width: 500px) { .kpi-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">Connector Degradation Monitoring Dashboard</div>
+  <div class="main-tabs">
+    <div class="main-tab active" data-page="overview">Monthly Overview</div>
+    <div class="main-tab" data-page="comparison">Monthly Comparison</div>
+  </div>
+</div>
+
+<div class="page active" id="page-overview">
+
+  <div class="scan-bar">
+    <label>Select month:</label>
+    <select id="sel-month"><option value="">— select —</option></select>
+    <button class="btn-query" id="btn-query">Query</button>
+    <span class="scan-status" id="scan-status"></span>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total RRUs scanned</div>
+      <div class="kpi-value blue" id="kpi-total">—</div>
+      <div class="kpi-sub" id="kpi-total-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">RL algorithm risk units</div>
+      <div class="kpi-value amber" id="kpi-rl">—</div>
+      <div class="kpi-sub" id="kpi-rl-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">VSWR risk units</div>
+      <div class="kpi-value red" id="kpi-vswr">—</div>
+      <div class="kpi-sub" id="kpi-vswr-sub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Both-method risk units</div>
+      <div class="kpi-value purple" id="kpi-both">—</div>
+      <div class="kpi-sub">Flagged by RL50 and VSWR</div>
+    </div>
+  </div>
+
+  <div class="dist-grid">
+    <div class="dist-panel">
+      <div class="dist-title">RL algorithm risk level distribution</div>
+      <div id="rl-dist"><div style="color:#A0B0C0;font-size:13px;">No data loaded.</div></div>
+    </div>
+    <div class="dist-panel">
+      <div class="dist-title">VSWR risk level distribution</div>
+      <div id="vswr-dist"><div style="color:#A0B0C0;font-size:13px;">No data loaded.</div></div>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-section-header">
+      <div class="table-section-title">Unit-level detail</div>
+      <div class="sub-tabs">
+        <div class="sub-tab active" data-subtab="rl">
+          RL Algorithm
+          <span class="sub-tab-badge" id="rl-tab-badge">—</span>
+        </div>
+        <div class="sub-tab" data-subtab="vswr">
+          VSWR Assessment
+          <span class="sub-tab-badge red" id="vswr-tab-badge">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-content active" id="subtab-rl">
+      <div class="filter-bar">
+        <span class="filter-label">Filter:</span>
+        <span class="filter-pill active" data-rf="alerts">Alerts only</span>
+        <span class="filter-pill" data-rf="early">Early</span>
+        <span class="filter-pill" data-rf="middle">Middle</span>
+        <span class="filter-pill" data-rf="late">Late</span>
+        <span class="filter-pill" data-rf="critical">Critical</span>
+        <span class="filter-pill" data-rf="all">All units</span>
+        <input class="filter-search" id="rl-search" type="text" placeholder="Search node name or serial…">
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr>
+            <th>Node name</th><th>Serial</th><th>RL status</th>
+            <th>Score</th><th>Worst branch</th>
+            <th>FV ratio</th><th>BTR</th><th>SZR</th><th>CoG (dB)</th><th>CoG override</th>
+          </tr></thead>
+          <tbody id="rl-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span class="table-footer-meta" id="rl-meta"></span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-export" id="exp-rl-view">Export current view</button>
+          <button class="btn-export" id="exp-rl-all">Export all alerts</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-content" id="subtab-vswr">
+      <div class="filter-bar">
+        <span class="filter-label">Filter:</span>
+        <span class="filter-pill active" data-vf="risk">Risk only</span>
+        <span class="filter-pill" data-vf="noout">Risk — no output</span>
+        <span class="filter-pill" data-vf="lt10">Risk — RL &lt; 10 dB</span>
+        <span class="filter-pill" data-vf="all">All units incl. healthy</span>
+        <input class="filter-search" id="vswr-search" type="text" placeholder="Search node name or serial…">
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr>
+            <th>Node name</th><th>Serial</th>
+            <th>VSWR status</th><th>Risk branch</th><th>VSWR value (dB)</th>
+          </tr></thead>
+          <tbody id="vswr-tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span class="table-footer-meta" id="vswr-meta"></span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-export" id="exp-vswr-view">Export current view</button>
+          <button class="btn-export" id="exp-vswr-all">Export all risk units</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-comparison">
+
+  <div class="scan-bar">
+    <label>Baseline:</label>
+    <select id="cmp-base"></select>
+    <label style="margin-left:8px;">vs</label>
+    <select id="cmp-target"></select>
+    <button class="btn-query" id="btn-compare">Compare</button>
+    <span class="scan-status" id="cmp-status"></span>
+  </div>
+
+  <div id="cmp-empty" style="text-align:center;padding:60px 24px;color:#A0B0C0;">
+    <div style="font-size:40px;opacity:0.3;margin-bottom:12px;">&#8644;</div>
+    <p style="font-size:14px;color:#4A6080;font-weight:500;">Select two months and click Compare</p>
+    <p style="font-size:13px;margin-top:6px;">The latest and previous scans are pre-selected above.</p>
+  </div>
+
+  <div id="cmp-content" style="display:none;">
+
+    <div style="font-size:13px;color:#8A9BB0;margin-bottom:16px;" id="cmp-subtitle"></div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+      <div class="kpi-card">
+        <div class="kpi-label">Total RRUs scanned</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-top:6px;">
+          <div><div style="font-size:11px;color:#A0B0C0;" id="cmp-lbl-base"></div><div class="kpi-value blue" style="font-size:28px;" id="cmp-total-base">-</div></div>
+          <div style="color:#A0B0C0;font-size:20px;padding-bottom:4px;">&#8594;</div>
+          <div><div style="font-size:11px;color:#A0B0C0;" id="cmp-lbl-target"></div><div class="kpi-value blue" style="font-size:28px;" id="cmp-total-target">-</div></div>
+        </div>
+        <div class="kpi-sub" id="cmp-total-delta"></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">RL algorithm risk units</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-top:6px;">
+          <div><div class="kpi-value amber" style="font-size:28px;" id="cmp-rl-base">-</div></div>
+          <div style="color:#A0B0C0;font-size:20px;padding-bottom:4px;">&#8594;</div>
+          <div><div class="kpi-value amber" style="font-size:28px;" id="cmp-rl-target">-</div></div>
+        </div>
+        <div class="kpi-sub" id="cmp-rl-delta"></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">VSWR risk units</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-top:6px;">
+          <div><div class="kpi-value red" style="font-size:28px;" id="cmp-vswr-base">-</div></div>
+          <div style="color:#A0B0C0;font-size:20px;padding-bottom:4px;">&#8594;</div>
+          <div><div class="kpi-value red" style="font-size:28px;" id="cmp-vswr-target">-</div></div>
+        </div>
+        <div class="kpi-sub" id="cmp-vswr-delta"></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Both-method risk units</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;margin-top:6px;">
+          <div><div class="kpi-value purple" style="font-size:28px;" id="cmp-both-base">-</div></div>
+          <div style="color:#A0B0C0;font-size:20px;padding-bottom:4px;">&#8594;</div>
+          <div><div class="kpi-value purple" style="font-size:28px;" id="cmp-both-target">-</div></div>
+        </div>
+        <div class="kpi-sub" id="cmp-both-delta"></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+      <div class="dist-panel">
+        <div class="dist-title">RL status distribution comparison</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr>
+            <th style="text-align:left;padding:7px 8px;font-size:11px;font-weight:600;color:#A0B0C0;border-bottom:1px solid #E0E6ED;">Status</th>
+            <th style="text-align:right;padding:7px 8px;font-size:11px;font-weight:600;color:#A0B0C0;border-bottom:1px solid #E0E6ED;" id="dist-th-base">-</th>
+            <th style="text-align:right;padding:7px 8px;font-size:11px;font-weight:600;color:#A0B0C0;border-bottom:1px solid #E0E6ED;" id="dist-th-target">-</th>
+            <th style="text-align:right;padding:7px 8px;font-size:11px;font-weight:600;color:#A0B0C0;border-bottom:1px solid #E0E6ED;">Change</th>
+          </tr></thead>
+          <tbody id="cmp-dist-tbody"></tbody>
+        </table>
+        <div id="cmp-dist-insight" style="background:#EFF6FF;border-left:3px solid #2563EB;border-radius:0 6px 6px 0;padding:8px 12px;margin-top:12px;font-size:12px;color:#1E40AF;line-height:1.6;display:none;"></div>
+      </div>
+
+      <div class="dist-panel">
+        <div class="dist-title">Status transition matrix</div>
+        <div style="font-size:11px;color:#A0B0C0;margin-bottom:10px;">Rows = baseline status  Columns = target status  Diagonal = no change</div>
+        <div id="cmp-matrix" style="overflow-x:auto;"></div>
+        <div id="cmp-matrix-insight" style="background:#EFF6FF;border-left:3px solid #2563EB;border-radius:0 6px 6px 0;padding:8px 12px;margin-top:12px;font-size:12px;color:#1E40AF;line-height:1.6;display:none;"></div>
+      </div>
+    </div>
+
+    <div class="dist-panel" style="margin-bottom:24px;">
+      <div class="dist-title">RL risk unit trend — all loaded scans</div>
+      <div style="font-size:12px;color:#A0B0C0;margin-bottom:14px;">Risk unit counts only (Early / Middle / Late / Critical) — Healthy units excluded. Highlighted bars = currently selected scans.</div>
+      <div id="trend-wrap" style="display:flex;align-items:flex-end;gap:8px;height:130px;padding:0 4px;"></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;" id="trend-legend"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   CONFIGURATION — update this list each month
+══════════════════════════════════════════ */
+const SCANS = [
+  { id: "20260212", label: "Feb 2026", path: "20260212/RRU_BXP_RL50_Health_Result.csv" },
+  { id: "20260306", label: "Mar 2026", path: "20260306/RRU_BXP_RL50_Health_Result.csv" },
+  /* Add new scans here:
+  { id: "20260401", label: "Apr 2026", path: "20260401/RRU_BXP_RL50_Health_Result.csv" },
+  */
+];
+
+/* ══════════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════════ */
+const RL_LEVELS = [
+  { key: "Healthy",            label: "Healthy",  color: "#059669", badge: "b-healthy"  },
+  { key: "Early Degradation",  label: "Early",    color: "#D97706", badge: "b-early"    },
+  { key: "Middle Degradation", label: "Middle",   color: "#EA580C", badge: "b-middle"   },
+  { key: "Late Degradation",   label: "Late",     color: "#DC2626", badge: "b-late"     },
+  { key: "Critical/Failed",    label: "Critical", color: "#991B1B", badge: "b-critical" },
+  { key: "No Data",            label: "No Data",  color: "#B4B2A9", badge: "b-nodata"   },
+];
+const RL_ALERT_KEYS = ["Early Degradation","Middle Degradation","Late Degradation","Critical/Failed"];
+const RL_ORDER = RL_LEVELS.map(l => l.key);
+const RL_MAP   = Object.fromEntries(RL_LEVELS.map(l => [l.key, l]));
+
+const VSWR_LEVELS = [
+  { key: "Risk — No Output",  label: "Risk — No Output",  color: "#7C3AED", badge: "b-risk-noout" },
+  { key: "Risk — RL < 10 dB",label: "Risk — RL < 10 dB", color: "#DC2626", badge: "b-risk-lt10"  },
+  { key: "Non-risk",          label: "Healthy",          color: "#059669", badge: "b-nonrisk"   },
+];
+const VSWR_MAP = Object.fromEntries(VSWR_LEVELS.map(l => [l.key, l]));
+const BRANCHES = ["A","B","C","D"];
+
+/* ══════════════════════════════════════════
+   STATE
+══════════════════════════════════════════ */
+let scanData    = null;
+let rlFilter    = "alerts";
+let vswrFilter  = "risk";
+let rlSearch    = "";
+let vswrSearch  = "";
+let rlVisible   = [];
+let vswrVisible = [];
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+document.addEventListener("DOMContentLoaded", () => {
+  /* Populate dropdown — newest first */
+  const sel = document.getElementById("sel-month");
+  [...SCANS].reverse().forEach((s, i) => {
+    sel.add(new Option(s.label + (i === 0 ? " (latest)" : ""), s.id));
+  });
+
+  /* Main tabs */
+  document.querySelectorAll(".main-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".main-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("page-" + tab.dataset.page).classList.add("active");
+    });
+  });
+
+  /* Sub-tabs */
+  document.querySelectorAll(".sub-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".sub-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".sub-content").forEach(c => c.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("subtab-" + tab.dataset.subtab).classList.add("active");
+    });
+  });
+
+  /* RL filter pills */
+  document.querySelectorAll("[data-rf]").forEach(pill => {
+    pill.addEventListener("click", () => {
+      document.querySelectorAll("[data-rf]").forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      rlFilter = pill.dataset.rf;
+      applyRLFilter();
+    });
+  });
+
+  /* VSWR filter pills */
+  document.querySelectorAll("[data-vf]").forEach(pill => {
+    pill.addEventListener("click", () => {
+      document.querySelectorAll("[data-vf]").forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      vswrFilter = pill.dataset.vf;
+      applyVSWRFilter();
+    });
+  });
+
+  /* Search boxes */
+  document.getElementById("rl-search").addEventListener("input", e => { rlSearch = e.target.value; applyRLFilter(); });
+  document.getElementById("vswr-search").addEventListener("input", e => { vswrSearch = e.target.value; applyVSWRFilter(); });
+
+  /* Query button */
+  document.getElementById("btn-query").addEventListener("click", queryScan);
+  initComparison();
+
+  /* Exports */
+  document.getElementById("exp-rl-view").addEventListener("click",   () => exportCSV(rlVisible,   RL_COLS,   "rl_view.csv"));
+  document.getElementById("exp-rl-all").addEventListener("click",    () => exportCSV(scanData ? scanData.units.filter(u => RL_ALERT_KEYS.includes(u.rl_status)) : [], RL_COLS, "rl_alerts.csv"));
+  document.getElementById("exp-vswr-view").addEventListener("click", () => exportCSV(vswrVisible, VSWR_COLS, "vswr_view.csv"));
+  document.getElementById("exp-vswr-all").addEventListener("click",  () => exportCSV(scanData ? scanData.units.filter(u => u.vswr_cat !== "Non-risk") : [], VSWR_COLS, "vswr_risk.csv"));
+});
+
+const RL_COLS   = ["node","serial","rl_status","score","worst_br","fv","btr","szr","cog","cog_override"];
+const VSWR_COLS = ["node","serial","vswr_cat","vswr_branch","vswr_db"];
+
+/* ══════════════════════════════════════════
+   LOAD CSV
+══════════════════════════════════════════ */
+function setStatus(msg, cls) {
+  const el = document.getElementById("scan-status");
+  el.textContent = msg;
+  el.className = "scan-status" + (cls ? " " + cls : "");
+}
+
+function queryScan() {
+  const id = document.getElementById("sel-month").value;
+  if (!id) { setStatus("Please select a month first.", "error"); return; }
+  const scan = SCANS.find(s => s.id === id);
+  if (!scan) { setStatus("Scan entry not found.", "error"); return; }
+
+  setStatus("Loading " + scan.label + "…", "loading");
+  document.getElementById("btn-query").disabled = true;
+
+  Papa.parse(scan.path, {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    complete(results) {
+      document.getElementById("btn-query").disabled = false;
+      if (!results.data || results.data.length === 0) {
+        setStatus("CSV is empty or could not be read.", "error");
+        return;
+      }
+      try {
+        scanData = buildScanData(results.data, scan);
+        setStatus("Loaded: " + scan.label + " — " + scanData.units.length.toLocaleString() + " units", "");
+        renderAll();
+      } catch(e) {
+        setStatus("Processing error: " + e.message, "error");
+        console.error(e);
+      }
+    },
+    error(err) {
+      document.getElementById("btn-query").disabled = false;
+      setStatus("Failed to fetch file. Run via: python -m http.server 8080", "error");
+    }
+  });
+}
+
+/* ══════════════════════════════════════════
+   BUILD SCAN DATA FROM CSV ROWS
+══════════════════════════════════════════ */
+function buildScanData(rows, meta) {
+  function pf(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
+
+  function nodeName(src) {
+    if (!src) return "";
+    return src.replace(/\\/g, "/").split("/").pop().replace(/\.log$/i, "");
+  }
+
+  /* Normalise RL status — strips branch count suffix like "(1/4 branches)" */
+  function normalizeRL(raw) {
+    if (!raw) return "No Data";
+    const s = raw.trim();
+    for (const l of RL_LEVELS) {
+      if (s.toLowerCase().startsWith(l.key.toLowerCase())) return l.key;
+    }
+    if (/healthy/i.test(s))  return "Healthy";
+    if (/early/i.test(s))    return "Early Degradation";
+    if (/middle/i.test(s))   return "Middle Degradation";
+    if (/late/i.test(s))     return "Late Degradation";
+    if (/critical/i.test(s)) return "Critical/Failed";
+    return "No Data";
+  }
+
+  /* Worst branch for RL table — columns are RL_{br}_{field} e.g. RL_A_Health */
+  function getWorstBranch(row) {
+    let best = { rank: -1, br: null, fv: null, btr: null, szr: null, cog: null, score: null };
+    for (const br of BRANCHES) {
+      const hs   = normalizeRL(row["RL_" + br + "_Health"] || "");
+      const rank = hs === "No Data" ? -1 : RL_ORDER.indexOf(hs);
+      if (rank > best.rank) {
+        best = {
+          rank, br: "Branch " + br,
+          fv:           pf(row["RL_" + br + "_FV_Ratio_Pct"]),
+          btr:          pf(row["RL_" + br + "_BTR_Pct"]),
+          szr:          pf(row["RL_" + br + "_SZR_Pct"]),
+          cog:          pf(row["RL_" + br + "_CoG"]),
+          score:        pf(row["RL_" + br + "_Score"]),
+          status: hs,
+        };
+      }
+    }
+    return best;
+  }
+
+  /* VSWR category */
+  function getVSWRCat(row) {
+    const riskFlag = (row["VSWR_risk_assessment"] || "").toLowerCase();
+    const isRisk   = riskFlag.includes("risk") && !riskFlag.includes("non");
+    if (!isRisk) return "Non-risk";
+
+    let hasNoOutput = false, minDb = null;
+    for (let i = 1; i <= 4; i++) {
+      const val = (row["VSWR_" + i + "_dB"] || "").trim();
+      if (!val || val === "N/A") continue;
+      if (/not enough output|no output/i.test(val)) { hasNoOutput = true; continue; }
+      const n = parseFloat(val);
+      if (!isNaN(n) && (minDb === null || n < minDb)) minDb = n;
+    }
+
+    if (minDb !== null && minDb < 10) return "Risk — RL < 10 dB";
+    if (hasNoOutput) return "Risk — No Output";
+    return "Risk — RL < 10 dB"; /* risk flagged, sub-type unclear */
+  }
+
+  /* Risk branch + dB value for VSWR table */
+  function getRiskBranch(row) {
+    let riskBr = null, minDb = null, noOut = false;
+    for (let i = 1; i <= 4; i++) {
+      const val = (row["VSWR_" + i + "_dB"] || "").trim();
+      const br  = "Branch " + BRANCHES[i-1];
+      if (!val || val === "N/A") continue;
+      if (/not enough output|no output/i.test(val)) { noOut = true; if (!riskBr) riskBr = br; continue; }
+      const n = parseFloat(val);
+      if (!isNaN(n) && (minDb === null || n < minDb)) { minDb = n; riskBr = br; }
+    }
+    return { branch: riskBr, db: minDb, noOut };
+  }
+
+  /* Build unit objects */
+  const units = rows.map(row => {
+    const rl  = getWorstBranch(row);
+    const vCat = getVSWRCat(row);
+    const rb   = getRiskBranch(row);
+    return {
+      node:        nodeName(row["source_file"] || ""),
+      serial:      (row["serial_number"] || "").trim(),
+      rl_status:   normalizeRL(row["Unit_Worst_Status"] || ""),
+      score:       rl.score,
+      worst_br:    rl.br,
+      fv:          rl.fv,
+      btr:         rl.btr,
+      szr:         rl.szr,
+      cog:         rl.cog,
+      cog_override: BRANCHES.some(br => {
+        const v = (row["RL_" + br + "_CoG_Override"] || "").trim().toLowerCase();
+        return v.includes("yes") || v.includes("true") || v === "1";
+      }) ? "Yes" : "No",
+      vswr_cat:    vCat,
+      vswr_branch: rb.branch,
+      vswr_db:     rb.db,
+      vswr_noout:  rb.noOut,
+    };
+  });
+
+  /* Counts */
+  const rlCounts = {}, vswrCounts = {};
+  RL_LEVELS.forEach(l => { rlCounts[l.key] = 0; });
+  VSWR_LEVELS.forEach(l => { vswrCounts[l.key] = 0; });
+  units.forEach(u => {
+    rlCounts[u.rl_status]  = (rlCounts[u.rl_status]  || 0) + 1;
+    vswrCounts[u.vswr_cat] = (vswrCounts[u.vswr_cat] || 0) + 1;
+  });
+
+  const rlRisk   = units.filter(u => RL_ALERT_KEYS.includes(u.rl_status)).length;
+  const vswrRisk = units.filter(u => u.vswr_cat !== "Non-risk").length;
+  const both     = units.filter(u => RL_ALERT_KEYS.includes(u.rl_status) && u.vswr_cat !== "Non-risk").length;
+
+  return { meta, units, rlCounts, vswrCounts, rlRisk, vswrRisk, both };
+}
+
+/* ══════════════════════════════════════════
+   RENDER
+══════════════════════════════════════════ */
+function renderAll() {
+  renderKPIs();
+  renderDist();
+  applyRLFilter();
+  applyVSWRFilter();
+  document.getElementById("rl-tab-badge").textContent   = scanData.rlRisk;
+  document.getElementById("vswr-tab-badge").textContent = scanData.vswrRisk;
+}
+
+function renderKPIs() {
+  const d = scanData;
+  const pct = n => d.units.length ? (n / d.units.length * 100).toFixed(1) + "% of fleet" : "";
+  document.getElementById("kpi-total").textContent = d.units.length.toLocaleString();
+  document.getElementById("kpi-rl").textContent    = d.rlRisk.toLocaleString();
+  document.getElementById("kpi-vswr").textContent  = d.vswrRisk.toLocaleString();
+  document.getElementById("kpi-both").textContent  = d.both.toLocaleString();
+  document.getElementById("kpi-total-sub").textContent = d.meta.label + " scan";
+  document.getElementById("kpi-rl-sub").textContent    = pct(d.rlRisk);
+  document.getElementById("kpi-vswr-sub").textContent  = pct(d.vswrRisk);
+}
+
+function renderDist() {
+  const d = scanData, total = d.units.length;
+
+  function distHTML(levels, counts) {
+    const maxCount = Math.max(...levels.map(l => counts[l.key] || 0), 1);
+    return levels.map(l => {
+      const cnt  = counts[l.key] || 0;
+      const pct  = total ? (cnt / total * 100).toFixed(1) : "0.0";
+      const barW = Math.round(cnt / maxCount * 100);
+      return `<div class="dist-row">
+        <div class="dist-level">
+          <span class="dist-dot" style="background:${l.color};"></span>${l.label}
+        </div>
+        <div class="dist-bar-wrap">
+          <div class="dist-bar" style="width:${barW}%;background:${l.color};"></div>
+        </div>
+        <div class="dist-count">${cnt.toLocaleString()}<span class="dist-pct">(${pct}%)</span></div>
+      </div>`;
+    }).join("");
+  }
+
+  document.getElementById("rl-dist").innerHTML   = distHTML(RL_LEVELS.filter(l => l.key !== "No Data" || (d.rlCounts["No Data"] || 0) > 0), d.rlCounts);
+  document.getElementById("vswr-dist").innerHTML = distHTML(VSWR_LEVELS, d.vswrCounts);
+}
+
+/* ── RL table ── */
+function applyRLFilter() {
+  if (!scanData) return;
+  const q = rlSearch.toLowerCase();
+
+  let units = scanData.units.filter(u => {
+    if (q && !u.node.toLowerCase().includes(q) && !u.serial.toLowerCase().includes(q)) return false;
+    switch (rlFilter) {
+      case "alerts":   return RL_ALERT_KEYS.includes(u.rl_status);
+      case "early":    return u.rl_status === "Early Degradation";
+      case "middle":   return u.rl_status === "Middle Degradation";
+      case "late":     return u.rl_status === "Late Degradation";
+      case "critical": return u.rl_status === "Critical/Failed";
+      default:         return true;
+    }
+  });
+
+  units.sort((a, b) => RL_ORDER.indexOf(b.rl_status) - RL_ORDER.indexOf(a.rl_status));
+  rlVisible = units;
+
+  const LIMIT = 200;
+  const shown = units.slice(0, LIMIT);
+
+  function pct(v, wTh, cTh, hiIsBad) {
+    if (v == null) return '<span class="td-muted">—</span>';
+    const cls = hiIsBad
+      ? (v >= cTh ? "m-bad" : v >= wTh ? "m-warn" : "m-ok")
+      : (v <= cTh ? "m-bad" : v <= wTh ? "m-warn" : "m-ok");
+    return `<span class="${cls}">${v.toFixed(1)}%</span>`;
+  }
+  function cogFmt(v) {
+    if (v == null) return '<span class="td-muted">—</span>';
+    const cls = v <= 14 ? "m-bad" : v <= 17 ? "m-warn" : "m-ok";
+    return `<span class="${cls}">${v.toFixed(1)}</span>`;
+  }
+  function cogOverrideFmt(v) {
+    if (!v) return '<span class="td-muted">—</span>';
+    const val = v.toString().trim().toLowerCase();
+    if (val.includes("yes") || val.includes("true") || val === "1")
+      return '<span style="color:#7C3AED;font-weight:600;">Yes</span>';
+    if (val.includes("no") || val.includes("false") || val === "0")
+      return '<span class="td-muted">No</span>';
+    return '<span class="td-muted">—</span>';
+  }
+
+  const rows = shown.map(u => {
+    const lv    = RL_MAP[u.rl_status] || RL_LEVELS[RL_LEVELS.length - 1];
+    const score = u.score != null ? Math.round(u.score) : null;
+    const scoreHTML = score != null
+      ? `<div class="score-wrap"><div class="score-bar"><div class="score-fill" style="width:${score}%;background:${lv.color};"></div></div><span>${score}</span></div>`
+      : '<span class="td-muted">—</span>';
+    return `<tr>
+      <td class="td-node">${esc(u.node || "—")}</td>
+      <td class="td-muted">${esc(u.serial || "—")}</td>
+      <td><span class="badge ${lv.badge}">${lv.label}</span></td>
+      <td>${scoreHTML}</td>
+      <td>${esc(u.worst_br || "—")}</td>
+      <td>${pct(u.fv,  1, 10, true)}</td>
+      <td>${pct(u.btr, 5, 30, true)}</td>
+      <td>${pct(u.szr, 70, 30, false)}</td>
+      <td>${cogFmt(u.cog)}</td>
+      <td>${cogOverrideFmt(u.cog_override)}</td>
+    </tr>`;
+  }).join("");
+
+  const tbody = document.getElementById("rl-tbody");
+  tbody.innerHTML = units.length === 0
+    ? `<tr><td colspan="10" style="text-align:center;padding:32px;color:#A0B0C0;">No units match the current filter.</td></tr>`
+    : rows + (units.length > LIMIT ? `<tr><td colspan="10" style="text-align:center;padding:12px;color:#C0CCD8;font-size:12px;">· · · ${(units.length - LIMIT).toLocaleString()} more rows — refine filters to narrow · · ·</td></tr>` : "");
+
+  document.getElementById("rl-meta").textContent =
+    `${units.length.toLocaleString()} of ${scanData.units.length.toLocaleString()} units shown · sorted by severity`;
+}
+
+/* ── VSWR table ── */
+function applyVSWRFilter() {
+  if (!scanData) return;
+  const q = vswrSearch.toLowerCase();
+
+  let units = scanData.units.filter(u => {
+    if (q && !u.node.toLowerCase().includes(q) && !u.serial.toLowerCase().includes(q)) return false;
+    switch (vswrFilter) {
+      case "risk":  return u.vswr_cat !== "Non-risk";
+      case "noout": return u.vswr_cat === "Risk — No Output";
+      case "lt10":  return u.vswr_cat === "Risk — RL < 10 dB";
+      default:      return true;
+    }
+  });
+
+  units.sort((a, b) => {
+    const order = ["Risk — RL < 10 dB", "Risk — No Output", "Non-risk"];
+    const ai = order.indexOf(a.vswr_cat), bi = order.indexOf(b.vswr_cat);
+    if (ai !== bi) return ai - bi;
+    return (a.vswr_db ?? 999) - (b.vswr_db ?? 999);
+  });
+
+  vswrVisible = units;
+  const LIMIT = 200;
+  const shown = units.slice(0, LIMIT);
+
+  const rows = shown.map(u => {
+    const lv = VSWR_MAP[u.vswr_cat];
+    let dbCell;
+    if (u.vswr_cat === "Non-risk") {
+      dbCell = '<span class="td-muted">—</span>';
+    } else if (u.vswr_noout || u.vswr_cat === "Risk — No Output") {
+      dbCell = '<span style="color:#7C3AED;font-style:italic;">no output</span>';
+    } else {
+      dbCell = `<span class="m-bad">${u.vswr_db != null ? u.vswr_db.toFixed(1) + " dB" : "—"}</span>`;
+    }
+    return `<tr>
+      <td class="td-node">${esc(u.node || "—")}</td>
+      <td class="td-muted">${esc(u.serial || "—")}</td>
+      <td><span class="badge ${lv.badge}">${lv.label}</span></td>
+      <td>${esc(u.vswr_branch || "—")}</td>
+      <td>${dbCell}</td>
+    </tr>`;
+  }).join("");
+
+  const tbody = document.getElementById("vswr-tbody");
+  tbody.innerHTML = units.length === 0
+    ? `<tr><td colspan="5" style="text-align:center;padding:32px;color:#A0B0C0;">No units match the current filter.</td></tr>`
+    : rows + (units.length > LIMIT ? `<tr><td colspan="5" style="text-align:center;padding:12px;color:#C0CCD8;font-size:12px;">· · · ${(units.length - LIMIT).toLocaleString()} more rows — refine filters to narrow · · ·</td></tr>` : "");
+
+  document.getElementById("vswr-meta").textContent =
+    `${units.length.toLocaleString()} of ${scanData.units.length.toLocaleString()} units shown`;
+}
+
+/* ══════════════════════════════════════════
+   EXPORT
+══════════════════════════════════════════ */
+function exportCSV(units, cols, filename) {
+  if (!units || units.length === 0) { alert("No data to export."); return; }
+  const rows = [cols.join(","), ...units.map(u =>
+    cols.map(c => {
+      const v = u[c]; if (v == null) return "";
+      const s = String(v);
+      return (s.includes(",") || s.includes('"')) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(",")
+  )];
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" })),
+    download: filename
+  });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ══════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════ */
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ══════════════════════════════════════════
+   COMPARISON TAB — STATE
+══════════════════════════════════════════ */
+let cmpBaseData   = null;
+let cmpTargetData = null;
+
+/* ══════════════════════════════════════════
+   COMPARISON TAB — INIT (called from DOMContentLoaded)
+   We patch this into the existing init block by
+   calling initComparison() at bottom of DOMContentLoaded.
+══════════════════════════════════════════ */
+function initComparison() {
+  const selBase   = document.getElementById("cmp-base");
+  const selTarget = document.getElementById("cmp-target");
+
+  // Populate dropdowns oldest first for base, newest first for target
+  [...SCANS].forEach(s => selBase.add(new Option(s.label, s.id)));
+  [...SCANS].reverse().forEach((s, i) => selTarget.add(new Option(s.label + (i === 0 ? " (latest)" : ""), s.id)));
+
+  // Default: base = second-to-last, target = latest
+  if (SCANS.length >= 2) {
+    selBase.value   = SCANS[SCANS.length - 2].id;
+    selTarget.value = SCANS[SCANS.length - 1].id;
+  }
+
+  document.getElementById("btn-compare").addEventListener("click", runComparison);
+}
+
+/* ══════════════════════════════════════════
+   RUN COMPARISON — load both CSVs then render
+══════════════════════════════════════════ */
+function runComparison() {
+  const baseId   = document.getElementById("cmp-base").value;
+  const targetId = document.getElementById("cmp-target").value;
+  if (!baseId || !targetId)      { setCmpStatus("Please select both months.", "error"); return; }
+  if (baseId === targetId)       { setCmpStatus("Please select two different months.", "error"); return; }
+
+  const baseScan   = SCANS.find(s => s.id === baseId);
+  const targetScan = SCANS.find(s => s.id === targetId);
+  if (!baseScan || !targetScan)  { setCmpStatus("Scan not found.", "error"); return; }
+
+  setCmpStatus("Loading " + baseScan.label + " and " + targetScan.label + "...", "loading");
+  document.getElementById("btn-compare").disabled = true;
+
+  let loaded = 0;
+  let baseRows = null, targetRows = null;
+
+  function onBothLoaded() {
+    document.getElementById("btn-compare").disabled = false;
+    try {
+      cmpBaseData   = buildScanData(baseRows,   baseScan);
+      cmpTargetData = buildScanData(targetRows, targetScan);
+      setCmpStatus("Comparing " + baseScan.label + " vs " + targetScan.label, "");
+      renderComparison();
+    } catch(e) {
+      setCmpStatus("Processing error: " + e.message, "error");
+      console.error(e);
+    }
+  }
+
+  Papa.parse(baseScan.path, {
+    download: true, header: true, skipEmptyLines: true,
+    complete(r) { baseRows = r.data; loaded++; if (loaded === 2) onBothLoaded(); },
+    error(e)    { document.getElementById("btn-compare").disabled = false; setCmpStatus("Failed to load " + baseScan.label + ". Run via: python -m http.server 8080", "error"); }
+  });
+
+  Papa.parse(targetScan.path, {
+    download: true, header: true, skipEmptyLines: true,
+    complete(r) { targetRows = r.data; loaded++; if (loaded === 2) onBothLoaded(); },
+    error(e)    { document.getElementById("btn-compare").disabled = false; setCmpStatus("Failed to load " + targetScan.label + ". Run via: python -m http.server 8080", "error"); }
+  });
+}
+
+function setCmpStatus(msg, cls) {
+  const el = document.getElementById("cmp-status");
+  el.textContent = msg;
+  el.className = "scan-status" + (cls ? " " + cls : "");
+}
+
+/* ══════════════════════════════════════════
+   RENDER COMPARISON
+══════════════════════════════════════════ */
+function renderComparison() {
+  document.getElementById("cmp-empty").style.display   = "none";
+  document.getElementById("cmp-content").style.display = "block";
+
+  const b = cmpBaseData, t = cmpTargetData;
+  document.getElementById("cmp-subtitle").textContent =
+    "Comparing " + b.meta.label + " (baseline) vs " + t.meta.label + " (target)";
+  document.getElementById("cmp-lbl-base").textContent   = b.meta.label;
+  document.getElementById("cmp-lbl-target").textContent = t.meta.label;
+  document.getElementById("dist-th-base").textContent   = b.meta.label;
+  document.getElementById("dist-th-target").textContent = t.meta.label;
+
+  renderCmpKPIs(b, t);
+  renderCmpDistribution(b, t);
+  renderCmpMatrix(b, t);
+  renderTrendChart();
+}
+
+/* ── KPI cards ── */
+function renderCmpKPIs(b, t) {
+
+  /* Build serial sets for each risk category */
+  const bSerials     = new Set(b.units.map(u => u.serial).filter(Boolean));
+  const tSerials     = new Set(t.units.map(u => u.serial).filter(Boolean));
+
+  const bRLRisk      = new Set(b.units.filter(u => RL_ALERT_KEYS.includes(u.rl_status)).map(u => u.serial).filter(Boolean));
+  const tRLRisk      = new Set(t.units.filter(u => RL_ALERT_KEYS.includes(u.rl_status)).map(u => u.serial).filter(Boolean));
+
+  const bVSWRRisk    = new Set(b.units.filter(u => u.vswr_cat !== "Non-risk").map(u => u.serial).filter(Boolean));
+  const tVSWRRisk    = new Set(t.units.filter(u => u.vswr_cat !== "Non-risk").map(u => u.serial).filter(Boolean));
+
+  const bBothRisk    = new Set(b.units.filter(u => RL_ALERT_KEYS.includes(u.rl_status) && u.vswr_cat !== "Non-risk").map(u => u.serial).filter(Boolean));
+  const tBothRisk    = new Set(t.units.filter(u => RL_ALERT_KEYS.includes(u.rl_status) && u.vswr_cat !== "Non-risk").map(u => u.serial).filter(Boolean));
+
+  /* Helper: compute new / disappeared / common between two serial sets */
+  function ndc(bSet, tSet) {
+    const newCount  = [...tSet].filter(s => !bSet.has(s)).length;
+    const goneCount = [...bSet].filter(s => !tSet.has(s)).length;
+    const common    = [...tSet].filter(s =>  bSet.has(s)).length;
+    return { newCount, goneCount, common };
+  }
+
+  /* Helper: render the +new / -disappeared / common line */
+  function ndcHTML(bSet, tSet) {
+    const { newCount, goneCount, common } = ndc(bSet, tSet);
+    const parts = [];
+    if (newCount  > 0) parts.push(`<span style="color:#059669;font-weight:600;">+${newCount.toLocaleString()} new</span>`);
+    if (goneCount > 0) parts.push(`<span style="color:#DC2626;font-weight:600;">-${goneCount.toLocaleString()} disappeared</span>`);
+    parts.push(`<span style="color:#8A9BB0;">${common.toLocaleString()} common</span>`);
+    return parts.join(" &nbsp;");
+  }
+
+  /* Total units card */
+  const newUnits  = [...tSerials].filter(s => !bSerials.has(s)).length;
+  const goneUnits = [...bSerials].filter(s => !tSerials.has(s)).length;
+  const commonUnits = [...tSerials].filter(s => bSerials.has(s)).length;
+  document.getElementById("cmp-total-base").textContent   = b.units.length.toLocaleString();
+  document.getElementById("cmp-total-target").textContent = t.units.length.toLocaleString();
+  document.getElementById("cmp-total-delta").innerHTML =
+    (newUnits  > 0 ? `<span style="color:#059669;font-weight:600;">+${newUnits.toLocaleString()} new</span> ` : "") +
+    (goneUnits > 0 ? `<span style="color:#DC2626;font-weight:600;">-${goneUnits.toLocaleString()} disappeared</span> ` : "") +
+    `<span style="color:#8A9BB0;">${commonUnits.toLocaleString()} common</span>`;
+
+  /* RL algorithm risk card */
+  document.getElementById("cmp-rl-base").textContent   = b.rlRisk.toLocaleString();
+  document.getElementById("cmp-rl-target").textContent = t.rlRisk.toLocaleString();
+  document.getElementById("cmp-rl-delta").innerHTML    = ndcHTML(bRLRisk, tRLRisk);
+
+  /* VSWR risk card */
+  document.getElementById("cmp-vswr-base").textContent   = b.vswrRisk.toLocaleString();
+  document.getElementById("cmp-vswr-target").textContent = t.vswrRisk.toLocaleString();
+  document.getElementById("cmp-vswr-delta").innerHTML    = ndcHTML(bVSWRRisk, tVSWRRisk);
+
+  /* Both-method risk card */
+  document.getElementById("cmp-both-base").textContent   = b.both.toLocaleString();
+  document.getElementById("cmp-both-target").textContent = t.both.toLocaleString();
+  document.getElementById("cmp-both-delta").innerHTML    = ndcHTML(bBothRisk, tBothRisk);
+}
+
+/* ── RL distribution comparison table ── */
+function renderCmpDistribution(b, t) {
+  const rows = RL_LEVELS.filter(l => l.key !== "No Data").map(l => {
+    const bv   = b.rlCounts[l.key] || 0;
+    const tv   = t.rlCounts[l.key] || 0;
+    const diff = tv - bv;
+    const isAlert = l.key !== "Healthy";
+    // For alerts: increase = bad (red). For Healthy: increase = good (green).
+    const diffColor = diff === 0 ? "#A0B0C0" : (isAlert ? (diff > 0 ? "#DC2626" : "#059669") : (diff > 0 ? "#059669" : "#DC2626"));
+    const diffStr   = diff === 0 ? "—" : (diff > 0 ? "+" : "") + diff.toLocaleString();
+    return `<tr>
+      <td style="padding:7px 8px;border-bottom:1px solid #F4F6F9;">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${l.color};margin-right:7px;vertical-align:middle;"></span>${l.label}
+      </td>
+      <td style="padding:7px 8px;text-align:right;border-bottom:1px solid #F4F6F9;color:#4A6080;">${bv.toLocaleString()}</td>
+      <td style="padding:7px 8px;text-align:right;border-bottom:1px solid #F4F6F9;font-weight:600;">${tv.toLocaleString()}</td>
+      <td style="padding:7px 8px;text-align:right;border-bottom:1px solid #F4F6F9;color:${diffColor};font-weight:600;">${diffStr}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("cmp-dist-tbody").innerHTML = rows;
+
+  // Insight
+  const totalWorsened = (t.rlCounts["Early Degradation"] || 0) + (t.rlCounts["Middle Degradation"] || 0) +
+                        (t.rlCounts["Late Degradation"] || 0)  + (t.rlCounts["Critical/Failed"] || 0);
+  const baseWorsened  = (b.rlCounts["Early Degradation"] || 0) + (b.rlCounts["Middle Degradation"] || 0) +
+                        (b.rlCounts["Late Degradation"] || 0)  + (b.rlCounts["Critical/Failed"] || 0);
+  const insightEl = document.getElementById("cmp-dist-insight");
+  const netChange = totalWorsened - baseWorsened;
+  insightEl.style.display = "block";
+  insightEl.textContent = netChange > 0
+    ? "Total degraded units increased by " + netChange + " — monitor for further progression in the next scan."
+    : netChange < 0
+      ? "Total degraded units decreased by " + Math.abs(netChange) + " — fleet health is improving."
+      : "Total degraded unit count is unchanged between the two scans.";
+}
+
+/* ── Transition matrix ── */
+function renderCmpMatrix(b, t) {
+  const levels = RL_LEVELS.filter(l => l.key !== "No Data");
+  const keys   = levels.map(l => l.key);
+
+  // Build serial -> status map for base and target
+  const bMap = {}, tMap = {};
+  b.units.forEach(u => { if (u.serial) bMap[u.serial] = u.rl_status; });
+  t.units.forEach(u => { if (u.serial) tMap[u.serial] = u.rl_status; });
+
+  // Build matrix counts
+  const matrix = {};
+  keys.forEach(r => { matrix[r] = {}; keys.forEach(c => { matrix[r][c] = 0; }); });
+
+  let worsened = 0, improved = 0;
+  Object.keys(bMap).forEach(serial => {
+    const from = bMap[serial];
+    const to   = tMap[serial];
+    if (!to || !matrix[from] || matrix[from][to] === undefined) return;
+    matrix[from][to]++;
+    const fi = RL_ORDER.indexOf(from), ti = RL_ORDER.indexOf(to);
+    if (fi >= 0 && ti >= 0) {
+      if (ti > fi) worsened++;
+      if (ti < fi) improved++;
+    }
+  });
+
+  // Diagonal colours per level
+  const diagBg = {
+    "Healthy":            "#F0FDF4", "Early Degradation":  "#FEF9EC",
+    "Middle Degradation": "#FFF0E8", "Late Degradation":   "#FEE9E9",
+    "Critical/Failed":    "#FCA5A5"
+  };
+  const diagColor = {
+    "Healthy":            "#166534", "Early Degradation":  "#92400E",
+    "Middle Degradation": "#7C2D12", "Late Degradation":   "#7F1D1D",
+    "Critical/Failed":    "#450A0A"
+  };
+
+  // Only render rows that have any transitions
+  const activeRows = keys.filter(r => keys.some(c => matrix[r][c] > 0));
+
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead><tr>
+      <th style="padding:5px 8px;text-align:left;font-size:10px;color:#A0B0C0;font-weight:600;background:#FAFBFC;border:1px solid #F0F4F8;">From \ To</th>
+      ${keys.map(k => `<th style="padding:5px 8px;text-align:center;font-size:10px;color:#A0B0C0;font-weight:600;background:#FAFBFC;border:1px solid #F0F4F8;">${RL_MAP[k] ? RL_MAP[k].label : k}</th>`).join("")}
+    </tr></thead><tbody>`;
+
+  activeRows.forEach(row => {
+    const lv = RL_MAP[row];
+    html += `<tr><td style="padding:5px 8px;font-size:11px;font-weight:600;color:${lv.color};background:#FAFBFC;border:1px solid #F0F4F8;white-space:nowrap;">${lv.label}</td>`;
+    keys.forEach(col => {
+      const val = matrix[row][col] || 0;
+      const ri  = RL_ORDER.indexOf(row), ci = RL_ORDER.indexOf(col);
+      let bg = "transparent", color = "#4A6080", fw = "400";
+      if (val === 0) {
+        html += `<td style="padding:5px 8px;text-align:center;color:#D1D9E6;border:1px solid #F0F4F8;">—</td>`;
+        return;
+      }
+      if (row === col) { bg = diagBg[row] || "#F8F9FB"; color = diagColor[row] || "#1A2A3A"; fw = "700"; }
+      else if (ci > ri) { bg = "#FEF3C7"; color = "#92400E"; if (ci - ri >= 2) { bg = "#FEE2E2"; color = "#7F1D1D"; } fw = "600"; }
+      else              { bg = "#F0FDF4"; color = "#166534"; fw = "600"; }
+      html += `<td style="padding:5px 8px;text-align:center;background:${bg};color:${color};font-weight:${fw};border:1px solid #F0F4F8;">${val.toLocaleString()}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+
+  document.getElementById("cmp-matrix").innerHTML = html;
+
+  const insightEl = document.getElementById("cmp-matrix-insight");
+  insightEl.style.display = "block";
+  insightEl.textContent =
+    worsened + " units degraded to a worse level. " +
+    improved + " units improved. Units skipping multiple levels (e.g. Healthy to Late) require immediate field inspection.";
+}
+
+/* ── Trend chart — stacked bars, one per loaded scan ── */
+function renderTrendChart() {
+  const wrap  = document.getElementById("trend-wrap");
+  const lgnd  = document.getElementById("trend-legend");
+  wrap.innerHTML = "";
+  lgnd.innerHTML = "";
+
+  // Collect all scans that have been loaded (base + target + any from overview)
+  const allLoaded = [];
+  SCANS.forEach(s => {
+    // Check if we have data for this scan from overview or comparison
+    if (s.id === cmpBaseData.meta.id)   allLoaded.push(cmpBaseData);
+    else if (s.id === cmpTargetData.meta.id) allLoaded.push(cmpTargetData);
+    else if (scanData && scanData.meta.id === s.id) allLoaded.push(scanData);
+  });
+  // Deduplicate by id
+  const seen = new Set();
+  const scans = allLoaded.filter(d => { if (seen.has(d.meta.id)) return false; seen.add(d.meta.id); return true; });
+  scans.sort((a, b) => a.meta.id.localeCompare(b.meta.id));
+
+  if (scans.length === 0) return;
+
+  // Only risk levels — Healthy excluded so risk trend is clearly visible
+  const stackLevels = [
+    { key: "Critical/Failed",    color: "#991B1B" },
+    { key: "Late Degradation",   color: "#DC2626" },
+    { key: "Middle Degradation", color: "#EA580C" },
+    { key: "Early Degradation",  color: "#D97706" },
+  ];
+  // Scale bars to max risk count across scans (not total units)
+  const maxRisk = Math.max(...scans.map(s =>
+    stackLevels.reduce((sum, lv) => sum + (s.rlCounts[lv.key] || 0), 0)
+  ), 1);
+  const CHART_H  = 110;
+  const selectedIds = new Set([cmpBaseData.meta.id, cmpTargetData.meta.id]);
+
+  scans.forEach(sd => {
+    const col   = document.createElement("div");
+    col.style.cssText = "flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;";
+
+    const stack = document.createElement("div");
+    const isSelected = selectedIds.has(sd.meta.id);
+    stack.style.cssText = `width:100%;max-width:56px;display:flex;flex-direction:column;gap:1px;justify-content:flex-end;height:${CHART_H}px;border-radius:3px 3px 0 0;overflow:hidden;` +
+      (isSelected ? "outline:2px solid #2563EB;border-radius:3px;" : "");
+
+    stackLevels.forEach(lv => {
+      const cnt = sd.rlCounts[lv.key] || 0;
+      const h   = Math.round((cnt / maxRisk) * CHART_H);
+      if (h > 0) {
+        const seg = document.createElement("div");
+        seg.style.cssText = `background:${lv.color};height:${h}px;width:100%;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+        seg.title = lv.key + ": " + cnt.toLocaleString();
+        if (h >= 14) {
+          const lbl = document.createElement("span");
+          lbl.style.cssText = "font-size:10px;font-weight:700;color:rgba(255,255,255,0.92);line-height:1;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,0.3);";
+          lbl.textContent = cnt.toLocaleString();
+          seg.appendChild(lbl);
+        }
+        stack.appendChild(seg);
+      }
+    });
+
+    const lbl = document.createElement("span");
+    lbl.style.cssText = "font-size:10px;margin-top:4px;white-space:nowrap;" +
+      (isSelected ? "color:#2563EB;font-weight:600;" : "color:#A0B0C0;");
+    lbl.textContent = sd.meta.label + (isSelected ? " ●" : "");
+
+    col.appendChild(stack);
+    col.appendChild(lbl);
+    wrap.appendChild(col);
+  });
+
+  // Legend
+  [...stackLevels].reverse().forEach(lv => {
+    const lv2 = RL_MAP[lv.key];
+    lgnd.innerHTML += `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#8A9BB0;">
+      <span style="width:10px;height:10px;border-radius:2px;background:${lv.color};display:inline-block;"></span>
+      ${lv2 ? lv2.label : lv.key}
+    </span>`;
+  });
+}
+</script>
+</body>
+</html>
